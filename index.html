@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Image Puzzle Game</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- Game Title -->
+    <p id="side">IMAGE PUZZLE GAME</p>
+    <br />
+
+    <!-- Puzzle and Original Image Side by Side -->
+    <div id="game_area">
+      <!-- Puzzle Container -->
+      <div id="puzzle_container">
+        <div class="puzzle_block"><img src="./image_part_001.png" alt="Block 1" /></div>
+        <div class="puzzle_block"><img src="./image_part_002.png" alt="Block 2" /></div>
+        <div class="puzzle_block"><img src="./image_part_003.png" alt="Block 3" /></div>
+        <div class="puzzle_block"><img src="./image_part_004.png" alt="Block 4" /></div>
+        <div class="puzzle_block"><img src="./image_part_005.png" alt="Block 5" /></div>
+        <div class="puzzle_block"><img src="./image_part_006.png" alt="Block 6" /></div>
+        <div class="puzzle_block"><img src="./image_part_007.png" alt="Block 7" /></div>
+        <div class="puzzle_block"><img src="./image_part_008.png" alt="Block 8" /></div>
+      </div>
+
+      <!-- Original Image for Reference -->
+      <div id="original_image_container">
+        <!-- <p>Original Image:</p> -->
+        <img src="./original_image.png" alt="Original Image" id="original_image" />
+      </div>
+    </div>
+
+    <!-- Move Counter -->
+    <center><div id="move_counter_display" style="margin-top: 5px; font-size: x-large">Moves: 0</div></center>
+
+    <!-- Timer Display -->
+    <center><div id="timer_display" style="margin-top: 5px; font-size: x-large">Time Remaining: 60s</div></center>
+
+    <!-- Scramble Button -->
+    <center><button id="scramble_button" style="width:130px; color: red; background-color: yellow; margin-top: 5px; font-size: x-large">Scramble</button></center>
+
+    <script>
+      class Game {
+        cols = 3;
+        rows = 3;
+        count;
+        blocks;
+        emptyBlockCoords = [2, 2];
+        indexes = [];
+        moveCounter = 0;
+        timer;
+        timeLimit = 60;
+
+        constructor() {
+          this.count = this.cols * this.rows;
+          this.blocks = document.getElementsByClassName("puzzle_block");
+          this.init();
+
+          document
+            .getElementById("scramble_button")
+            .addEventListener("click", () => this.scramble());
+        }
+
+        init() {
+          for (let y = 0; y < this.rows; y++) {
+            for (let x = 0; x < this.cols; x++) {
+              let blockIdx = x + y * this.cols;
+              if (blockIdx + 1 >= this.count) break;
+              let block = this.blocks[blockIdx];
+              this.positionBlockAtCoord(blockIdx, x, y);
+              block.addEventListener("click", (e) =>
+                this.onClickOnBlock(blockIdx)
+              );
+              this.indexes.push(blockIdx);
+            }
+          }
+          this.indexes.push(this.count - 1);
+          this.updateMoveCounterDisplay();
+
+          this.randomize(50); // Shuffle without affecting the move counter
+          this.startTimer();
+        }
+
+        startTimer() {
+          let timeRemaining = this.timeLimit;
+          const timerDisplay = document.getElementById("timer_display");
+          clearInterval(this.timer);
+
+          this.timer = setInterval(() => {
+            if (timeRemaining > 0) {
+              timerDisplay.textContent = `Time Remaining: ${timeRemaining--}s`;
+            } else {
+              clearInterval(this.timer);
+              alert("Time's up! Game Over!");
+            }
+          }, 1000);
+        }
+
+        randomize(iterationCount) {
+          for (let i = 0; i < iterationCount; i++) {
+            let randomBlockIdx = Math.floor(Math.random() * (this.count - 1));
+            let moved = this.moveBlock(randomBlockIdx, false); // Shuffle without incrementing the move counter
+            if (!moved) i--;
+          }
+        }
+
+        scramble() {
+          this.resetGame();
+          this.randomize(50);
+          this.moveCounter = 0; // Reset the move counter to 0
+          this.updateMoveCounterDisplay();
+          this.startTimer();
+        }
+
+        resetGame() {
+          for (let i = 0; i < this.count - 1; i++) {
+            this.positionBlockAtCoord(
+              i,
+              i % this.cols,
+              Math.floor(i / this.cols)
+            );
+          }
+          this.emptyBlockCoords = [2, 2];
+          this.indexes = [];
+          for (let i = 0; i < this.count; i++) {
+            this.indexes.push(i);
+          }
+        }
+
+        moveBlock(blockIdx, incrementMove = true) {
+          let block = this.blocks[blockIdx];
+          let blockCoords = this.canMoveBlock(block);
+          if (blockCoords != null) {
+            this.positionBlockAtCoord(
+              blockIdx,
+              this.emptyBlockCoords[0],
+              this.emptyBlockCoords[1]
+            );
+            this.indexes[
+              this.emptyBlockCoords[0] + this.emptyBlockCoords[1] * this.cols
+            ] = this.indexes[blockCoords[0] + blockCoords[1] * this.cols];
+            this.emptyBlockCoords[0] = blockCoords[0];
+            this.emptyBlockCoords[1] = blockCoords[1];
+            if (incrementMove) {
+              this.moveCounter++; // Only increment the move counter when the player moves a block
+              this.updateMoveCounterDisplay();
+            }
+            return true;
+          }
+          return false;
+        }
+
+        canMoveBlock(block) {
+          let blockPos = [
+            parseInt(block.style.left),
+            parseInt(block.style.top),
+          ];
+          let blockWidth = block.clientWidth;
+          let blockCoords = [
+            blockPos[0] / blockWidth,
+            blockPos[1] / blockWidth,
+          ];
+          let diff = [
+            Math.abs(blockCoords[0] - this.emptyBlockCoords[0]),
+            Math.abs(blockCoords[1] - this.emptyBlockCoords[1]),
+          ];
+          let canMove =
+            (diff[0] == 1 && diff[1] == 0) || (diff[0] == 0 && diff[1] == 1);
+          return canMove ? blockCoords : null;
+        }
+
+        positionBlockAtCoord(blockIdx, x, y) {
+          let block = this.blocks[blockIdx];
+          block.style.left = x * block.clientWidth + "px";
+          block.style.top = y * block.clientWidth + "px";
+        }
+
+        onClickOnBlock(blockIdx) {
+          if (this.moveBlock(blockIdx)) {
+            if (this.checkPuzzleSolved()) {
+              clearInterval(this.timer);
+              setTimeout(
+                () => alert("Congratulations! You solved the puzzle!"),
+                600
+              );
+            }
+          }
+        }
+
+        checkPuzzleSolved() {
+          for (let i = 0; i < this.indexes.length; i++) {
+            if (
+              i ==
+              this.emptyBlockCoords[0] + this.emptyBlockCoords[1] * this.cols
+            )
+              continue;
+            if (this.indexes[i] != i) return false;
+          }
+          return true;
+        }
+
+        updateMoveCounterDisplay() {
+          const moveCounterDisplay = document.getElementById(
+            "move_counter_display"
+          );
+          moveCounterDisplay.textContent = `Moves: ${this.moveCounter}`;
+        }
+      }
+
+      let game = new Game();
+    </script>
+  </body>
+</html>

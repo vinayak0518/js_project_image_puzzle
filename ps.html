@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solvable Image Puzzle Game</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="login_form">
+    <h2>Login to Start the Game</h2>
+    <form id="login" onsubmit="return startGame(event)">
+      <label for="username">Username:</label>
+      <input type="text" id="username" name="username" required><br><br>
+      <label for="difficulty">Choose Difficulty:</label>
+      <select id="difficulty" name="difficulty" required>
+        <option value="easy">Easy</option>
+        <option value="medium" selected>Medium</option>
+        <option value="hard">Hard</option>
+      </select><br><br>
+      <button type="submit">Start Game</button>
+    </form>
+  </div>
+
+  <div id="game_section" style="display: none;">
+    <p id="side">IMAGE PUZZLE GAME</p><br>
+    <div id="game_area">
+      <div id="puzzle_container"></div>
+      <div id="original_image_container">
+        <img src="./original_image.png" alt="Original Image" id="original_image">
+      </div>
+    </div>
+    <div id="move_counter_display">Moves: 0</div>
+    <div id="timer_display">Time Remaining: 60s</div>
+    <button id="scramble_button">Scramble</button>
+  </div>
+
+  <div id="results_section">
+    <h3>Game Results</h3>
+    <table id="results_table" border="1">
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Difficulty</th>
+          <th>Moves</th>
+          <th>Completed</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    let game;
+
+    function startGame(event) {
+      event.preventDefault();
+      const username = document.getElementById("username").value;
+      const difficulty = document.getElementById("difficulty").value;
+      document.getElementById("login_form").style.display = "none";
+      document.getElementById("game_section").style.display = "block";
+      game = new Game(difficulty, username);
+    }
+
+    class Game {
+      cols = 3;
+      rows = 3;
+      count = this.cols * this.rows;
+      blocks;
+      emptyBlockCoords = [2, 2];
+      indexes = [];
+      moveCounter = 0;
+      timer;
+      timeLimit = 60;
+      username;
+
+      constructor(difficulty, username) {
+        this.difficulty = difficulty;
+        this.username = username;
+        this.createPuzzleBlocks();
+        document.getElementById("scramble_button").addEventListener("click", () => this.scramble());
+        this.init();
+      }
+
+      createPuzzleBlocks() {
+        const puzzleContainer = document.getElementById("puzzle_container");
+        puzzleContainer.innerHTML = "";
+        puzzleContainer.style.display = "grid";
+        puzzleContainer.style.gridTemplateColumns = `repeat(${this.cols}, 1fr)`;
+        puzzleContainer.style.gridTemplateRows = `repeat(${this.rows}, 1fr)`;
+
+        for (let i = 0; i < this.count - 1; i++) {
+          const block = document.createElement("div");
+          block.classList.add("puzzle_block");
+          block.innerHTML = `<img src="./image_part_00${i + 1}.png" alt="Block ${i + 1}">`;
+          puzzleContainer.appendChild(block);
+        }
+        this.blocks = document.getElementsByClassName("puzzle_block");
+      }
+
+      init() {
+        for (let y = 0; y < this.rows; y++) {
+          for (let x = 0; x < this.cols; x++) {
+            let blockIdx = x + y * this.cols;
+            if (blockIdx + 1 >= this.count) break;
+            let block = this.blocks[blockIdx];
+            this.positionBlockAtCoord(blockIdx, x, y);
+            block.addEventListener("click", () => this.onClickOnBlock(blockIdx));
+            this.indexes.push(blockIdx);
+          }
+        }
+        this.indexes.push(this.count - 1);
+        this.updateMoveCounterDisplay();
+        this.randomize();
+        this.startTimer();
+      }
+
+      randomize() {
+        let isSolvable = false;
+        const iterations = this.difficulty === "easy" ? 10 : this.difficulty === "medium" ? 50 : 100;
+        
+        while (!isSolvable) {
+          for (let i = 0; i < iterations; i++) {
+            let randomBlockIdx = Math.floor(Math.random() * (this.count - 1));
+            let moved = this.moveBlock(randomBlockIdx, false);
+            if (!moved) i--;
+          }
+          isSolvable = this.isSolvable();
+          if (!isSolvable) this.resetGame();
+        }
+      }
+
+      resetGame() {
+        for (let i = 0; i < this.count - 1; i++) {
+          this.positionBlockAtCoord(i, i % this.cols, Math.floor(i / this.cols));
+        }
+        this.emptyBlockCoords = [2, 2];
+        this.indexes = [];
+        for (let i = 0; i < this.count; i++) {
+          this.indexes.push(i);
+        }
+      }
+
+      isSolvable() {
+        let inversionCount = 0;
+        const positions = this.indexes.slice(0, this.count - 1);
+        for (let i = 0; i < positions.length; i++) {
+          for (let j = i + 1; j < positions.length; j++) {
+            if (positions[i] > positions[j]) inversionCount++;
+          }
+        }
+        return inversionCount % 2 === 0;
+      }
+
+      startTimer() {
+        let timeRemaining = this.timeLimit;
+        const timerDisplay = document.getElementById("timer_display");
+        clearInterval(this.timer);
+
+        this.timer = setInterval(() => {
+          if (timeRemaining > 0) {
+            timerDisplay.textContent = `Time Remaining: ${timeRemaining--}s`;
+          } else {
+            clearInterval(this.timer);
+            alert("Time's up! Game Over!");
+          }
+        }, 1000);
+      }
+
+      moveBlock(blockIdx, incrementMove = true) {
+        let block = this.blocks[blockIdx];
+        let blockCoords = this.canMoveBlock(block);
+        if (blockCoords != null) {
+          this.positionBlockAtCoord(blockIdx, this.emptyBlockCoords[0], this.emptyBlockCoords[1]);
+          this.indexes[this.emptyBlockCoords[0] + this.emptyBlockCoords[1] * this.cols] = this.indexes[blockCoords[0] + blockCoords[1] * this.cols];
+          this.emptyBlockCoords[0] = blockCoords[0];
+          this.emptyBlockCoords[1] = blockCoords[1];
+          if (incrementMove) {
+            this.moveCounter++;
+            this.updateMoveCounterDisplay();
+          }
+          return true;
+        }
+        return false;
+      }
+
+      canMoveBlock(block) {
+        let blockPos = [parseInt(block.style.left), parseInt(block.style.top)];
+        let blockWidth = block.clientWidth;
+        let blockCoords = [blockPos[0] / blockWidth, blockPos[1] / blockWidth];
+        let diff = [Math.abs(blockCoords[0] - this.emptyBlockCoords[0]), Math.abs(blockCoords[1] - this.emptyBlockCoords[1])];
+        return (diff[0] === 1 && diff[1] === 0) || (diff[0] === 0 && diff[1] === 1) ? blockCoords : null;
+      }
+
+      positionBlockAtCoord(blockIdx, x, y) {
+        let block = this.blocks[blockIdx];
+        block.style.left = x * block.clientWidth + "px";
+        block.style.top = y * block.clientWidth + "px";
+      }
+
+      onClickOnBlock(blockIdx) {
+        if (this.moveBlock(blockIdx)) {
+          if (this.checkPuzzleSolved()) {
+            clearInterval(this.timer);
+            setTimeout(() => alert("Congratulations! You solved the puzzle!"), 600);
+            this.saveGameResult(true);
+          }
+        }
+      }
+
+      checkPuzzleSolved() {
+        for (let i = 0; i < this.indexes.length; i++) {
+          if (i === this.emptyBlockCoords[0] + this.emptyBlockCoords[1] * this.cols) continue;
+          if (this.indexes[i] !== i) return false;
+        }
+        return true;
+      }
+
+      updateMoveCounterDisplay() {
+        document.getElementById("move_counter_display").textContent = `Moves: ${this.moveCounter}`;
+      }
+
+      saveGameResult(completed) {
+        const gameResult = {
+          username: this.username,
+          difficulty: this.difficulty,
+          moves: this.moveCounter,
+          completed,
+          date: new Date().toLocaleString()
+        };
+
+        let results = JSON.parse(localStorage.getItem("gameResults")) || [];
+        results.push(gameResult);
+        localStorage.setItem("gameResults", JSON.stringify(results));
+        displayResults();
+      }
+    }
+
+    function displayResults() {
+      const results = JSON.parse(localStorage.getItem("gameResults")) || [];
+      const resultsTableBody = document.querySelector("#results_table tbody");
+      resultsTableBody.innerHTML = "";
+
+      results.forEach((result) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${result.username}</td>
+          <td>${result.difficulty}</td>
+          <td>${result.moves}</td>
+          <td>${result.completed ? "Yes" : "No"}</td>
+          <td>${result.date}</td>
+        `;
+        resultsTableBody.appendChild(row);
+      });
+    }
+
+    // Display results on page load
+    displayResults();
+  </script>
+</body>
+</html>
